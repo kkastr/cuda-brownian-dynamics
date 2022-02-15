@@ -13,15 +13,13 @@ __global__ void rng_setup_kernel(unsigned int seed,curandStatePhilox4_32_10_t *s
 }
 
 
-__device__ void integration_kernel(float dt, float prf, float *x, float *y, float *z,curandStatePhilox4_32_10_t *state)
+__device__ void integration_kernel(float dt, float prf, float3 lbox, float *x, float *y, float *z,curandStatePhilox4_32_10_t *state)
 {
   int i = blockIdx.x*blockDim.x + threadIdx.x;
 
   float xrn;
   float yrn;
   float zrn;
-  float updf;
-  float prob;
 
   curandStatePhilox4_32_10_t localState = state[i];
 
@@ -37,16 +35,15 @@ __device__ void integration_kernel(float dt, float prf, float *x, float *y, floa
 
   float r = sqrt(x[i]*x[i] + y[i]*y[i]);
 
-  //TODO: fix boundary conditions
-  if (r>rcav){
-    x[i] = x[i]*rcav/r;
-    y[i] = y[i]*rcav/r;
+  //TODO: use better boundary conditions
+  if (abs(x) > lbox.x/2){
+    x[i] = x[i];
   }
-  if( z[i] < zmin){
-    z[i] = zmin;
+  if (abs(y > lbox.y/2)){
+    y[i] = y[i];
   }
-  if( z[i] > lcav){
-    z[i] = lcav-(float)1;
+  if (abs(z > lbox.z/2)){
+    z[i] = z[i];
   }
 }
 
@@ -119,7 +116,7 @@ int main(int argc, char* argv[])
   while (t < tmax)
   {
 
-    integration_kernel<<<blockCount, threadsPerBlock>>>(dt, prf, d_x, d_y, d_z, devPHILOXStates);
+    integration_kernel<<<blockCount, threadsPerBlock>>>(dt, prf, lbox, d_x, d_y, d_z, devPHILOXStates);
 
 
     if (steps%outputfreq==0)
