@@ -130,7 +130,7 @@ int main(int argc, char* argv[])
       fprintf(cout_position, "comment\n");
       for (int i = 0; i < N; i++)
       {
-        fprintf(cout_position,"%i,%f,%f,%f\n",i,hx[i],hy[i],hz[i]);
+        fprintf(cout_position,"a%i %f %f %f \n",i,hx[i],hy[i],hz[i]);
 
       }
     }
