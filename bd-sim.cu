@@ -36,13 +36,13 @@ __device__ void integration_kernel(float dt, float prf, float3 lbox, float *x, f
   float r = sqrt(x[i]*x[i] + y[i]*y[i]);
 
   //TODO: use better boundary conditions
-  if (abs(x) > lbox.x/2){
+  if (abs(x[i]) > lbox.x/2){
     x[i] = x[i];
   }
-  if (abs(y > lbox.y/2)){
+  if (abs(y[i]) > lbox.y/2){
     y[i] = y[i];
   }
-  if (abs(z > lbox.z/2)){
+  if (abs(z[i]) > lbox.z/2){
     z[i] = z[i];
   }
 }
@@ -52,8 +52,6 @@ int main(int argc, char* argv[])
 {
   unsigned int seed;
   double tmax;
-
-  int kernel_typeflag;
 
   if (argc > 1){
 		seed = atoi(argv[0]); //sim seed
