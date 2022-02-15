@@ -13,7 +13,7 @@ __global__ void rng_setup_kernel(unsigned int seed,curandStatePhilox4_32_10_t *s
 }
 
 
-__device__ void integration_kernel(float dt, int steps, float *x, float *y, float *z,curandStatePhilox4_32_10_t *state)
+__device__ void integration_kernel(float dt, float prf, float *x, float *y, float *z,curandStatePhilox4_32_10_t *state)
 {
   int i = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -73,13 +73,16 @@ int main(int argc, char* argv[])
   float dt = 0.01;
   int outputfreq = 1000;
   float kT = 1, m = 1, gamma = 1;
+  float3 lbox;
+
+  lbox.x = lbox.y = lbox.z = 25;
 
 
   float prf = sqrt((2*kT*gamma)/(m*dt));
   float *hx, *hy, *hz, *d_x, *d_y, *d_z;
 
   char cout_pos[64];
-	sprintf(cout_pos,"trajectory.xyz";
+	sprintf(cout_pos,"trajectory.xyz");
 
   FILE *cout_position;
   cout_position=fopen(cout_pos,"w");
@@ -115,8 +118,8 @@ int main(int argc, char* argv[])
 
   while (t < tmax)
   {
-    //TODO: fix inputs
-    integration_kernel<<<blockCount, threadsPerBlock>>>(kernel_typeflag, dt, steps, d_x, d_y, d_z, devPHILOXStates);
+
+    integration_kernel<<<blockCount, threadsPerBlock>>>(dt, prf, d_x, d_y, d_z, devPHILOXStates);
 
 
     if (steps%outputfreq==0)
@@ -125,8 +128,8 @@ int main(int argc, char* argv[])
         cudaMemcpy(hy, d_y, N*sizeof(float), cudaMemcpyDeviceToHost);
         cudaMemcpy(hz, d_z, N*sizeof(float), cudaMemcpyDeviceToHost);
 
-      fprintf(cout_position, "%i", N)
-      fprintf(cout_position, "comment")
+      fprintf(cout_position, "%i", N);
+      fprintf(cout_position, "comment");
       for (int i = 0; i < N; i++)
       {
         fprintf(cout_position,"%i,%f,%f,%f\n",i,hx[i],hy[i],hz[i]);
