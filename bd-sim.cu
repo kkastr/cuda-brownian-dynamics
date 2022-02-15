@@ -13,7 +13,7 @@ __global__ void rng_setup_kernel(unsigned int seed,curandStatePhilox4_32_10_t *s
 }
 
 
-__device__ void integration_kernel(float dt, float prf, float3 lbox, float *x, float *y, float *z,curandStatePhilox4_32_10_t *state)
+__global__ void integration_kernel(float dt, float prf, float3 lbox, float *x, float *y, float *z,curandStatePhilox4_32_10_t *state)
 {
   int i = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -116,6 +116,9 @@ int main(int argc, char* argv[])
 
     integration_kernel<<<blockCount, threadsPerBlock>>>(dt, prf, lbox, d_x, d_y, d_z, devPHILOXStates);
 
+   if (cudaDeviceSynchronize() != cudaSuccess) {
+       fprintf (stderr, "Cuda call failed\n");
+   }
 
     if (steps%outputfreq==0)
     {
@@ -123,8 +126,8 @@ int main(int argc, char* argv[])
         cudaMemcpy(hy, d_y, N*sizeof(float), cudaMemcpyDeviceToHost);
         cudaMemcpy(hz, d_z, N*sizeof(float), cudaMemcpyDeviceToHost);
 
-      fprintf(cout_position, "%i", N);
-      fprintf(cout_position, "comment");
+      fprintf(cout_position, "%i\n", N);
+      fprintf(cout_position, "comment\n");
       for (int i = 0; i < N; i++)
       {
         fprintf(cout_position,"%i,%f,%f,%f\n",i,hx[i],hy[i],hz[i]);
