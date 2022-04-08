@@ -4,145 +4,175 @@
 #include <curand_kernel.h>
 #include <math.h>
 
-__global__ void rng_setup_kernel(unsigned int seed,curandStatePhilox4_32_10_t *state)
+__global__ void rng_setup_kernel(unsigned int seed, curandState *state)
 {
     int id = threadIdx.x + blockIdx.x * blockDim.x;
     /* Each thread gets same seed, a different sequence
-       number, no offset */
+            number, no offset */
     curand_init(seed, id, 0, &state[id]);
 }
 
+__global__ void integration_kernel(int N, float dt, float prf, float intTime, float lxHalf, float lyHalf, float lzHalf, float *x, float *y, float *z, curandState *state) {
 
-__global__ void integration_kernel(float dt, float prf, float3 lbox, float *x, float *y, float *z,curandStatePhilox4_32_10_t *state)
-{
-  int i = blockIdx.x*blockDim.x + threadIdx.x;
+    float xrn;
+    float yrn;
+    float zrn;
 
-  float xrn;
-  float yrn;
-  float zrn;
+    int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-  curandStatePhilox4_32_10_t localState = state[i];
+    if (i < N) {
+        for (int t=0; t < intTime; t++) {
+            xrn = curand_uniform(&state[i])-0.5;
+            yrn = curand_uniform(&state[i])-0.5;
+            zrn = curand_uniform(&state[i])-0.5;
 
-  xrn = curand_uniform(&localState)-0.5;
-  yrn = curand_uniform(&localState)-0.5;
-  zrn = curand_uniform(&localState)-0.5;
+            x[i] = x[i] + prf * xrn * dt;
+            y[i] = y[i] + prf * yrn * dt;
+            z[i] = z[i] + prf * zrn * dt;
 
-  state[i] = localState;
+            if (abs(x[i]) > lxHalf) {
+                int sgnx = x[i]/abs(x[i]);
+                x[i] = x[i] - 2 * sgnx * (abs(x[i]) - lxHalf);
+            }
+            if (abs(y[i]) > lyHalf) {
+                int sgny = y[i]/abs(y[i]);
+                y[i] = y[i] - 2 * sgny * (abs(y[i]) - lyHalf);
+            }
+            if (abs(z[i]) > lzHalf) {
+                int sgnz = z[i]/abs(z[i]);
+                z[i] = z[i] - 2 * sgnz * (abs(z[i]) - lzHalf);
+            }
+        }
+    }
+}
 
-  x[i] = x[i] + prf*xrn*dt;
-  y[i] = y[i] + prf*yrn*dt;
-  z[i] = z[i] + prf*zrn*dt;
-
-  float r = sqrt(x[i]*x[i] + y[i]*y[i]);
-
-  //TODO: use better boundary conditions
-  if (abs(x[i]) > lbox.x/2){
-    x[i] = x[i];
-  }
-  if (abs(y[i]) > lbox.y/2){
-    y[i] = y[i];
-  }
-  if (abs(z[i]) > lbox.z/2){
-    z[i] = z[i];
-  }
+float uniform_distribution(int rangeLow, int rangeHigh) {
+    float randVal = (float)rand() / (float)RAND_MAX;
+    int range = rangeHigh - rangeLow + 1;
+    float randVal_scaled = (randVal * (float)range) + (float)rangeLow;
+    return randVal_scaled;
 }
 
 
-int main(int argc, char* argv[])
-{
-  unsigned int seed;
-  double tmax;
+int arraySum_int (int arr[], int arrLength) {
 
-  if (argc > 1){
-		seed = atoi(argv[0]); //sim seed
-    tmax = atof(argv[1]); //maximum runtime in timesteps;
-	}
-	else {
-		printf("No arguments given. \n Need to provide the following: seed, tmax.\n");
-		return 1;
-	}
+    int sum = 0;
 
-  srand(seed);
-  double t = 0;
-  int steps = 0;
-  float dt = 0.01;
-  int outputfreq = 1000;
-  float kT = 1, m = 1, gamma = 1;
-  float3 lbox;
-
-  lbox.x = lbox.y = lbox.z = 25;
-
-
-  float prf = sqrt((2*kT*gamma)/(m*dt));
-  float *hx, *hy, *hz, *d_x, *d_y, *d_z;
-
-  char cout_pos[64];
-	sprintf(cout_pos,"trajectory.xyz");
-
-  FILE *cout_position;
-  cout_position=fopen(cout_pos,"w");
-
-  const unsigned int threadsPerBlock = 64;
-  const unsigned int blockCount = 64;
-  int N = threadsPerBlock * blockCount;
-
-  hx = (float*)malloc(N*sizeof(float));
-  hy = (float*)malloc(N*sizeof(float));
-  hz = (float*)malloc(N*sizeof(float));
-
-  cudaMalloc(&d_x, N*sizeof(float));
-  cudaMalloc(&d_y, N*sizeof(float));
-  cudaMalloc(&d_z, N*sizeof(float));
-
-  curandStatePhilox4_32_10_t *devPHILOXStates;
-
-  cudaMalloc((void **)&devPHILOXStates, N*sizeof(curandStatePhilox4_32_10_t));
-
-  rng_setup_kernel<<<blockCount, threadsPerBlock>>>(seed,devPHILOXStates);
-
-  for (int j=0;j<N;j++){
-    hx[j] = 0.0f;
-    hy[j] = 0.0f;
-    hz[j] = 0.0f;
-
-  }
-
-  cudaMemcpy(d_x, hx, N*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_y, hy, N*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_z, hz, N*sizeof(float), cudaMemcpyHostToDevice);
-
-  while (t < tmax)
-  {
-
-    integration_kernel<<<blockCount, threadsPerBlock>>>(dt, prf, lbox, d_x, d_y, d_z, devPHILOXStates);
-
-   if (cudaDeviceSynchronize() != cudaSuccess) {
-       fprintf (stderr, "Cuda call failed\n");
-   }
-
-    if (steps%outputfreq==0)
-    {
-        cudaMemcpy(hx, d_x, N*sizeof(float), cudaMemcpyDeviceToHost);
-        cudaMemcpy(hy, d_y, N*sizeof(float), cudaMemcpyDeviceToHost);
-        cudaMemcpy(hz, d_z, N*sizeof(float), cudaMemcpyDeviceToHost);
-
-      fprintf(cout_position, "%i\n", N);
-      fprintf(cout_position, "comment\n");
-      for (int i = 0; i < N; i++)
-      {
-        fprintf(cout_position,"a%i %f %f %f \n",i,hx[i],hy[i],hz[i]);
-
-      }
+    for (int i = 0; i < arrLength; i++) {
+        sum += arr[i];
     }
 
-    t+=dt;
-    steps++;
-  }
-  cudaFree(devPHILOXStates);
-  cudaFree(d_x);
-  cudaFree(d_y);
-  cudaFree(d_z);
-  free(hx);
-  free(hy);
-  free(hz);
+    return sum;
+}
+
+static void printTrajectory(int Npart, FILE *fp, int frame, float x[], float y[], float z[]) {
+
+
+    for (int i=0; i < Npart; i++) {
+        fprintf(fp, "%i,%i,%f,%f,%f\n", frame, i, x[i], y[i], z[i]);
+    }
+}
+
+int main(int argc, char* argv[]) {
+    unsigned int seed;
+    int gpu_id;
+    int N;
+    int lbox;
+    int maxtime;
+
+    if (argc > 1){
+        gpu_id = atoi(argv[1]); // which gpu to run on
+        seed = atoi(argv[2]); //sim seed
+        N = atoi(argv[3]); // number of particles
+        lbox = atoi(argv[4]); // side length of the box
+        maxtime = (int)atof(argv[5]); //maximum simulation steps to run the integration
+
+    } else {
+        printf("No arguments given.\nNeed to provide the following: gpu_id, seed, number of particles, box side length, max amount of time for the sim to run.\n");
+        return 1;
+    }
+
+    cudaSetDevice(gpu_id);
+    srand(seed);
+
+    int steps = 0;
+    int outfreq = 100;
+    int maxsteps = maxtime / outfreq;
+    float dt = 0.1f;
+
+    float lxHalf = lbox / 2;
+    float lyHalf = lbox / 2;
+    float lzHalf = lbox / 2;
+
+    float kT = 1.0f, m = 1.0f, gamma = 1.0f;
+    float D, prf;
+
+    D = kT*gamma/m;
+
+    prf = sqrt(12.0f * 2.0f * D / dt);
+
+    curandState *devStates;
+    float *hx, *hy, *hz, *dx, *dy, *dz;
+
+    char cout_filename[64];
+    FILE *cout_fp;
+
+    sprintf(cout_filename, "trajectory-N%i-frames%i-lbox%i-seed%i.csv", N, maxsteps, lbox, seed);
+    cout_fp = fopen(cout_filename, "w");
+
+    fprintf(cout_fp, "frame,id,x,y,z\n");
+
+    hx = (float*)malloc(N*sizeof(float));
+    hy = (float*)malloc(N*sizeof(float));
+    hz = (float*)malloc(N*sizeof(float));
+
+    for (int i = 0; i < N; i++) {
+        // hx[i] = uniform_distribution(-lxHalf, lxHalf);
+        // hy[i] = uniform_distribution(-lyHalf, lyHalf);
+        // hz[i] = uniform_distribution(-lzHalf, lzHalf);
+        hx[i] = 0.0f;
+        hy[i] = 0.0f;
+        hz[i] = 0.0f;
+
+    }
+
+    cudaMalloc(&dx, N * sizeof(float));
+    cudaMalloc(&dy, N * sizeof(float));
+    cudaMalloc(&dz, N * sizeof(float));
+
+    cudaMemcpy(dx, hx, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dy, hy, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dz, hz, N * sizeof(float), cudaMemcpyHostToDevice);
+
+    const unsigned int threadsPerBlock = 256;
+    const unsigned int blockCount = ceil((float)N / (float)threadsPerBlock);
+
+    cudaMalloc((void **)&devStates, N * sizeof(curandState));
+
+    rng_setup_kernel<<<blockCount, threadsPerBlock>>>(seed, devStates);
+
+    while (steps < maxsteps) {
+
+        cudaMemcpy(hx, dx, N * sizeof(float), cudaMemcpyDeviceToHost);
+        cudaMemcpy(hy, dy, N * sizeof(float), cudaMemcpyDeviceToHost);
+        cudaMemcpy(hz, dz, N * sizeof(float), cudaMemcpyDeviceToHost);
+
+        printTrajectory(N, cout_fp, steps, hx, hy, hz);
+
+        integration_kernel<<<blockCount, threadsPerBlock>>>(N, dt, prf, outfreq, lxHalf, lyHalf, lzHalf, dx, dy, dz, devStates);
+
+        if (cudaDeviceSynchronize() != cudaSuccess) {
+            fprintf (stderr, "Cuda call failed\n");
+        }
+
+        steps++;
+    }
+
+    cudaFree(devStates);
+    cudaFree(dx);
+    cudaFree(dy);
+    cudaFree(dz);
+    free(hx);
+    free(hy);
+    free(hz);
 }
