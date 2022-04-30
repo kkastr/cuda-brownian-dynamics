@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import scipy.optimize as optimization
 
 
-def acf(x):
+def acf_fft(x):
 
     xp = x - np.mean(x)
     f = np.fft.fft(xp)
@@ -14,7 +14,7 @@ def acf(x):
     return np.real(pi)[:x.size // 2] / np.sum(xp**2)
 
 
-def autocorrFFT(x):
+def acf_psd(x):
     N = len(x)
     F = np.fft.fft(x, n=2 * N)
     psd = F * F.conjugate()
@@ -28,7 +28,7 @@ def msd_fft(r):
     N = len(r)
     D = np.square(r).sum(axis=1)
     D = np.append(D, 0)
-    S2 = sum([autocorrFFT(r[:, i]) for i in range(r.shape[1])])
+    S2 = sum([acf_psd(r[:, i]) for i in range(r.shape[1])])
     Q = 2 * D.sum()
     S1 = np.zeros(N)
     for m in range(N):
@@ -86,14 +86,24 @@ b = out[1]
 
 # print(f"a = {out[0]}, b = {out[1]}")
 
+Dth = 1
+
 Dsim = (10**b / 6) / (outfreq * dt)  # approriate time units
+
+Derror = abs(Dth - Dsim) / Dth
 
 yfit = (10**b) * time**a
 
+text_props = dict(boxstyle='round', facecolor='white', alpha=0.25)
+
 plt.loglog(time, yfit, linestyle='--', color='k', label='Theory', zorder=5)
 plt.loglog(time, msd, color='r', label='Simulation', zorder=0)
+
+plt.text(100, 1000, f'$D_\mathrm{{error}} = {(100 * Derror):.3f} \%$', bbox=text_props)
+
 plt.ylabel('Mean Square Displacement')
 plt.xlabel('Time')
 plt.legend()
 plt.tight_layout()
+plt.savefig('./plots/msd.png', dpi=300)
 plt.show()
