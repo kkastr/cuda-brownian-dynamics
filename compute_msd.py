@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as optimization
+import time
 
 
 def acf_fft(x):
@@ -25,19 +26,18 @@ def acf_psd(x):
 
 
 def msd_fft(r):
-    N = len(r)
+    N = r.shape[0]
     D = np.square(r).sum(axis=1)
     D = np.append(D, 0)
-    S2 = sum([acf_psd(r[:, i]) for i in range(r.shape[1])])
     Q = 2 * D.sum()
+    S2 = np.sum([acf_psd(r[:, i]) for i in range(r.shape[1])], axis=0)
     S1 = np.zeros(N)
     for m in range(N):
         Q = Q - D[m - 1] - D[N - m]
         S1[m] = Q / (N - m)
     return S1 - 2 * S2
 
-
-def msd_straight_forward(r):
+def msd_standard(r):
     shifts = np.arange(len(r))
     msds = np.zeros(shifts.size)
 
@@ -62,29 +62,43 @@ dt = 0.1
 
 df = pd.read_csv(fname)
 
-rdf = df.groupby('id')
+scols = ['x', 'y', 'z']
 
-msdx = rdf.x.apply(lambda k: msd_fft(k.values.reshape(nframes, 1)))
-msdy = rdf.y.apply(lambda k: msd_fft(k.values.reshape(nframes, 1)))
-msdz = rdf.z.apply(lambda k: msd_fft(k.values.reshape(nframes, 1)))
+dfn = df.astype({'frame': np.int16, 'id': np.int16,
+                 'x': np.float32, 'y': np.float32, 'z': np.float32})
 
-msdr = msdx + msdy + msdz
+rdf = dfn.groupby(['id'])
 
-msd = msdr.mean(axis=0)[1:]
+before = time.perf_counter()
 
-time = np.arange(1, nframes)
+msds = np.zeros((N, nframes))
+
+for key, grp in rdf:
+
+    msds[key, :] = msd_fft(grp[scols].values)
+
+
+msd = msds.mean(axis=0)[1:]
+
+after = time.perf_counter()
+
+elapsed = after - before
+
+print(f"elapsed: {elapsed} seconds")
+
+t = np.arange(1, nframes)
 
 halfway = nframes // 2
 
-px = np.log10(time)
-py = np.log10(msd)
+fx = np.log10(t)
+fy = np.log10(msd)
 
-out, cov = optimization.curve_fit(fitfunc, px, py, [0, 0])
+out, cov = optimization.curve_fit(fitfunc, fx, fy, [0, 0])
 
 a = out[0]
 b = out[1]
 
-# print(f"a = {out[0]}, b = {out[1]}")
+print(f"a = {out[0]}, b = {out[1]}")
 
 Dth = 1
 
@@ -92,18 +106,23 @@ Dsim = (10**b / 6) / (outfreq * dt)  # approriate time units
 
 Derror = abs(Dth - Dsim) / Dth
 
-yfit = (10**b) * time**a
+yfit = (10**b) * t**a
+
+plt.rc('font', family='serif', size=20)
+plt.rc('lines', linewidth=4, aa=True)
 
 text_props = dict(boxstyle='round', facecolor='white', alpha=0.25)
 
-plt.loglog(time, yfit, linestyle='--', color='k', label='Theory', zorder=5)
-plt.loglog(time, msd, color='r', label='Simulation', zorder=0)
+fig = plt.figure(figsize=(10, 6))
 
-plt.text(100, 1000, f'$D_\mathrm{{error}} = {(100 * Derror):.3f} \%$', bbox=text_props)
+plt.loglog(t, yfit, linestyle='--', color='k', label='Theory', zorder=5)
+plt.loglog(t, msd, color='r', label='Simulation', zorder=0)
+
+plt.text(100, 1000, f'$D_\\mathrm{{error}} = {(100 * Derror):.3f} \\%$', bbox=text_props)
 
 plt.ylabel('Mean Square Displacement')
 plt.xlabel('Time')
 plt.legend()
 plt.tight_layout()
-plt.savefig('./plots/msd.png', dpi=300)
+plt.savefig('./plots/msd.png', dpi=600)
 plt.show()
