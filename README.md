@@ -1,4 +1,17 @@
-# Brownian dynamics simulation written in CUDA.
+# Brownian dynamics simulation written in CUDA
 
-![anim](./plots/bd_vis.gif)
-![msd](./plots/msd.png)
+<div align="center">
+<img src="./plots/bd_vis.gif" height="400">
+</div>
+
+Brownian motion is the result of stochastic fluctuations in a given quantity. This type of motion has rich mathematical structure and is ubiquitous in many fields of study such as physics, biology, economics, and social science.
+
+In physics for instance, particles undergoing Brownian motion (Brownian particles) are often used as models for biological processes as they are intimately linked to the concept of diffusion. Mathematically exploring the diffusion of Brownian particles yields a method for computing their diffusion coefficient which, loosely speaking, denotes the "spread" in the particles position within a given system affording inside on the physical behaviour of said system.
+
+The present repo is an implementation of particles evolving with Brownian dynamics inside of a box, written in CUDA. In physics, we often use Brownian particles in complex geometries as models for complex biological systems. A CUDA implementation allows for simulating many thousands of these particles at once, in addition to any further interactions that may be needed for the physical system under investigation.
+
+<div align="center">
+<img src="./plots/msd.png" height="335">
+</div>
+
+The figure above is a typical measure of Brownian motion, the mean square displacement. In a standard system, in which all relevant quantities (temperature etc.) are set to unity, the diffusion coefficient should also be unity. From the simulation we can compute the mean square displacement of the particles. As can be seen we obtain good agreement with the theoretical result for the diffusion of Brownian particles, indicating that the particles in the simulation are indeed undergoing Brownian motion.
