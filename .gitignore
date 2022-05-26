@@ -1,10 +1,8 @@
 ./data/*
-./images/
-./images/*
+images/
 imagelist.dat
 thumb_plot.py
 make_gif.py
-animation_plot.ipynd
 
 *.csv
 *.i

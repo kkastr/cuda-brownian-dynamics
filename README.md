@@ -1,7 +1,7 @@
 # Brownian dynamics simulation written in CUDA
 
 <div align="center">
-<img src="./plots/bd_vis.gif" height="400">
+<img src="./plots/bd_anim.gif">
 </div>
 
 Brownian motion is the result of stochastic fluctuations in a given quantity. This type of motion has rich mathematical structure and is ubiquitous in many fields of study such as physics, biology, economics, and social science.
