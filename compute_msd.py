@@ -37,6 +37,7 @@ def msd_fft(r):
         S1[m] = Q / (N - m)
     return S1 - 2 * S2
 
+
 def msd_standard(r):
     shifts = np.arange(len(r))
     msds = np.zeros(shifts.size)
